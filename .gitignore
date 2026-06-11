@@ -1,0 +1,24 @@
+# Dependencies & build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Reverse-engineering / research artifacts — NOT for publication
+work/
+reports/
+outputs/
+.ruflo/
+.playwright-mcp/
+workspace.md
+
+# Local secrets & runtime state
+.chowdeck-mcp/
+.env
+.env.*
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
