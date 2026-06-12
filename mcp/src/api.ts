@@ -9,6 +9,8 @@ import { session } from "./session.js";
 
 const BASE = "https://api.chowdeck.com";
 
+export type PaymentMethod = "card" | "wallet" | "online_payment" | "pay_for_me";
+
 function client(): AxiosInstance {
   const headers: Record<string, string> = {
     "x-app-name": "storefront",
@@ -23,9 +25,9 @@ function client(): AxiosInstance {
 
 // ── Location / geocoding ───────────────────────────────────────────────────────
 // Chowdeck proxies Google Places autocomplete + details through its own API.
-// Reverse geocoding (current coords -> address) uses Google's public web key
-// embedded in the storefront frontend.
-const MAPS_KEY = "AIzaSyBaKld94OVIQ3ifigG8X02wEfOa4JzVRS4";
+// Reverse geocoding uses a caller-provided Google Maps API key.
+// Set GOOGLE_MAPS_API_KEY before using reverse_geocode.
+const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 export async function searchPlaces(input: string) {
   return (await client().get("/place/autocomplete/json", { params: { input } })).data;
@@ -36,6 +38,10 @@ export async function placeDetails(placeId: string) {
 }
 
 export async function reverseGeocode(lat: number, lng: number) {
+  if (!MAPS_KEY) {
+    throw new Error("GOOGLE_MAPS_API_KEY is required for reverse_geocode. Use search_places if no Maps key is configured.");
+  }
+
   const url = "https://maps.googleapis.com/maps/api/geocode/json";
   return (await axios.get(url, { params: { latlng: `${lat},${lng}`, key: MAPS_KEY } })).data;
 }
@@ -43,8 +49,7 @@ export async function reverseGeocode(lat: number, lng: number) {
 // Rough current location from IP — for SUGGESTION ONLY; never order against it
 // without the user confirming the precise address.
 export async function ipLocation() {
-  const r = (await axios.get("http://ip-api.com/json/?fields=status,city,regionName,country,lat,lon,query")).data;
-  return r;
+  return (await axios.get("https://ipapi.co/json/", { timeout: 5000 })).data;
 }
 
 function componentsToAddress(result: any, houseNo?: string) {
@@ -328,7 +333,7 @@ export async function placeOrder(body: {
   vendor_id: number;
   cart_id: number;
   fee_id: number;
-  payment_method: string; // "card" | "wallet" | "online_payment" | "pay_for_me"
+  payment_method: PaymentMethod;
   payment_method_id?: number; // required for saved cards
   online_channel?: string; // for online_payment: seeds Paystack channel (card|bank_transfer|...)
   address_id?: number;
