@@ -228,7 +228,7 @@ export async function getCartByVendor(vendorId: number) {
 
 export async function createOrUpdateCart(body: {
   vendor_id: number;
-  items: { item_id: number; quantity: number; type?: string }[];
+  items: { item_id: number; quantity: number; type?: string; pack_reference?: string }[];
   address_id?: number;
   class?: string;
 }) {
@@ -503,13 +503,24 @@ export async function placeOrder(body: {
 
   // For online payment, immediately fetch the Paystack checkout link so the
   // order isn't abandoned. The hosted page lets the user pick card/transfer/etc;
-  // online_channel just seeds it.
+  // online_channel just seeds it. If that fails, fall back to startPayment (v2)
+  // which uses a different Paystack integration path.
   if (body.payment_method === "online_payment" && res?.data?.id) {
     try {
       const pay: any = await startOrderPayment(res.data.id, body.online_channel ?? "card");
       res.data.payment = pay?.data ?? pay;
     } catch (err: any) {
-      res.data.payment_error = err?.response?.data ?? err?.message ?? String(err);
+      // startOrderPayment failed — try startPayment v2 as fallback
+      try {
+        const fallback: any = await startPayment({
+          order_id: res.data.id,
+          method: body.online_channel ?? "card",
+        });
+        res.data.payment = fallback?.data ?? fallback;
+        res.data._payment_fallback = "startPayment_v2";
+      } catch {
+        res.data.payment_error = err?.response?.data ?? err?.message ?? String(err);
+      }
     }
   }
   return res;

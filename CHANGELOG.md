@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-13
+
+### Added
+- **`update_cart` pack support** — optional `pack_reference` parameter groups items
+  into separate packs within the same cart (e.g. two small chops packs for
+  different people). Pass matching `pack_reference` strings to group items.
+
+### Fixed
+- **`online_payment` fallback** — when Paystack payment link generation fails,
+  automatically retries via `startPayment` v2 endpoint so the order still gets
+  a checkout URL instead of being abandoned.
+
 ### In progress
 - Online payment (Paystack) checkout: bank transfer / card-less / new-customer
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches

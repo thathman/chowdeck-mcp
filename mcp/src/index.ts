@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.7.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -340,7 +340,7 @@ server.registerTool(
 server.registerTool(
   "update_cart",
   {
-    description: "Create or update a cart with items for a vendor. Works as guest after set_address.",
+    description: "Create or update a cart with items for a vendor. Works as guest after set_address. Use pack_reference to group items into separate packs within the same cart.",
     inputSchema: {
       vendor_id: z.number(),
       items: z.array(
@@ -348,6 +348,7 @@ server.registerTool(
           item_id: z.number(),
           quantity: z.number().int().min(1).max(99),
           type: z.string().default("menu"),
+          pack_reference: z.string().optional().describe("Group items into packs by matching pack_reference values"),
         }),
       ),
       address_id: z.number().optional(),
