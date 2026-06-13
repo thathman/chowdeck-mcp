@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.3.0] — 2026-06-13
+
+### Added
+- **Discovery filters** on `list_vendors` (sort, open_now, min_rating,
+  max_delivery_fee, free_delivery, page) and `search` (sort, open_now,
+  min_rating).
+- **Favourites** — `list_favorites`, `add_favorite`, `remove_favorite` for saved
+  vendors.
+- **`reorder`** — rebuild a cart from a past order id, ready to confirm and
+  check out.
+
+> Note: favourites endpoints are best-effort (inferred paths) and may need
+> adjustment against the live API.
+
 ## [0.2.0] — 2026-06-13
 
 ### Added

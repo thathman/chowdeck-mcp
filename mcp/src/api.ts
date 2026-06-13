@@ -131,6 +131,13 @@ export async function getVendors(params: {
   vendor_type?: string;
   tag?: string;
   q?: string;
+  // Filters — passed through to Chowdeck; unknown values are ignored server-side.
+  sort?: string; // e.g. "rating" | "delivery_time" | "distance"
+  open_now?: boolean;
+  min_rating?: number;
+  max_delivery_fee?: number;
+  free_delivery?: boolean;
+  page?: number;
 }) {
   const id = params.address_id ?? session.addressId;
   if (!id) throw new Error("No address set. Call set_address first.");
@@ -158,11 +165,47 @@ export async function getMenuItem(vendorId: number, menuId: number) {
   return (await client().get(`/customer/vendor/${vendorId}/menu/${menuId}`)).data;
 }
 
-export async function searchVendors(q: string) {
+export async function searchVendors(
+  q: string,
+  filters: { sort?: string; open_now?: boolean; min_rating?: number } = {},
+) {
   if (!session.addressId) throw new Error("No address set. Call set_address first.");
   return (await client().get("/customer/search", {
-    params: { q, address_id: session.addressId },
+    params: { q, address_id: session.addressId, ...filters },
   })).data;
+}
+
+// ── Favourites / saved vendors ──────────────────────────────────────────────
+// Best-effort: endpoint paths inferred from Chowdeck's REST conventions and may
+// need adjusting. Each returns the API response (or error) verbatim.
+
+export async function listFavorites() {
+  return (await client().get("/customer/vendor/favorite")).data;
+}
+
+export async function addFavorite(vendorId: number) {
+  return (await client().post(`/customer/vendor/${vendorId}/favorite`, {})).data;
+}
+
+export async function removeFavorite(vendorId: number) {
+  return (await client().delete(`/customer/vendor/${vendorId}/favorite`)).data;
+}
+
+// ── Reorder ─────────────────────────────────────────────────────────────────
+// Rebuild a cart from a past order so the user can re-place it. Composes
+// getOrder -> extract items -> createOrUpdateCart. Returns the new cart.
+export async function reorder(orderId: string) {
+  const orderRes: any = await getOrder(orderId);
+  const order = orderRes?.data ?? orderRes;
+  const vendorId = order?.vendor_id ?? order?.vendor?.id;
+  if (!vendorId) throw new Error("Could not determine the vendor from that order.");
+  const sourceItems: any[] = order?.order_items ?? order?.items ?? [];
+  const items = sourceItems
+    .filter((it) => (it?.type ?? "menu") !== "container")
+    .map((it) => ({ item_id: it.item_id ?? it.menu_id ?? it.id, quantity: it.quantity ?? 1, type: it.type ?? "menu" }))
+    .filter((it) => it.item_id);
+  if (!items.length) throw new Error("That order has no re-orderable items.");
+  return createOrUpdateCart({ vendor_id: vendorId, items });
 }
 
 // ── Cart ──────────────────────────────────────────────────────────────────────

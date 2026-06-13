@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.2.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.3.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -212,8 +212,19 @@ server.registerTool(
 server.registerTool(
   "list_vendors",
   {
-    description: "List vendors (restaurants, shops, pharmacies...) near the current address.",
-    inputSchema: { vendor_type: z.string().optional(), tag: z.string().optional(), q: z.string().optional(), address_id: z.number().optional() },
+    description: "List vendors (restaurants, shops, pharmacies...) near the current address, with optional filters.",
+    inputSchema: {
+      vendor_type: z.string().optional(),
+      tag: z.string().optional(),
+      q: z.string().optional(),
+      address_id: z.number().optional(),
+      sort: z.enum(["rating", "delivery_time", "distance"]).optional().describe("Sort order"),
+      open_now: z.boolean().optional().describe("Only vendors open right now"),
+      min_rating: z.number().min(0).max(5).optional(),
+      max_delivery_fee: z.number().optional().describe("Cap the delivery fee (NGN)"),
+      free_delivery: z.boolean().optional(),
+      page: z.number().int().min(1).optional(),
+    },
     annotations: READ,
   },
   async (args) => run(() => api.getVendors(args), { slim: true }),
@@ -231,8 +242,17 @@ server.registerTool(
 
 server.registerTool(
   "search",
-  { description: "Search vendors and meals near the current address.", inputSchema: { q: z.string() }, annotations: READ },
-  async ({ q }) => run(() => api.searchVendors(q), { slim: true }),
+  {
+    description: "Search vendors and meals near the current address, with optional filters.",
+    inputSchema: {
+      q: z.string(),
+      sort: z.enum(["rating", "delivery_time", "distance"]).optional(),
+      open_now: z.boolean().optional(),
+      min_rating: z.number().min(0).max(5).optional(),
+    },
+    annotations: READ,
+  },
+  async ({ q, ...filters }) => run(() => api.searchVendors(q, filters), { slim: true }),
 );
 
 server.registerTool(
@@ -257,7 +277,37 @@ server.registerTool(
   async ({ vendor_id, menu_id }) => run(() => api.getMenuItem(vendor_id, menu_id), { slim: true }),
 );
 
+// ── Favourites ──────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "list_favorites",
+  { description: "List the user's saved/favourite vendors (requires login).", inputSchema: {}, annotations: READ },
+  async () => run(() => api.listFavorites(), { slim: true }),
+);
+
+server.registerTool(
+  "add_favorite",
+  { description: "Save a vendor to the user's favourites (requires login).", inputSchema: { vendor_id: z.number() }, annotations: WRITE },
+  async ({ vendor_id }) => run(() => api.addFavorite(vendor_id)),
+);
+
+server.registerTool(
+  "remove_favorite",
+  { description: "Remove a vendor from the user's favourites (requires login).", inputSchema: { vendor_id: z.number() }, annotations: WRITE },
+  async ({ vendor_id }) => run(() => api.removeFavorite(vendor_id)),
+);
+
 // ── Cart ──────────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "reorder",
+  {
+    description: "Rebuild a cart from a past order so the user can place it again. Pass a past order_id (from get_order_history). Returns the new cart; confirm and checkout as usual.",
+    inputSchema: { order_id: z.string() },
+    annotations: WRITE,
+  },
+  async ({ order_id }) => run(() => api.reorder(order_id)),
+);
 
 server.registerTool("get_carts", { description: "List all carts for the current session.", inputSchema: {}, annotations: READ }, async () =>
   run(() => api.getCarts(), { slim: true }),
