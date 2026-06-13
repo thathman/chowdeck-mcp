@@ -16,7 +16,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.1.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.1.1" });
 
 function json(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };

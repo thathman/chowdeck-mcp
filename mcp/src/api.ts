@@ -4,10 +4,13 @@
  * License: CC BY 4.0 — copy/adapt with attribution. © 2026 Hendrix Nwaokolo.
  * Watermark: THATHMAN·CHOWDECK·MCP
  */
-import axios, { type AxiosInstance } from "axios";
+import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { session } from "./session.js";
 
-const BASE = "https://api.chowdeck.com";
+const BASE = process.env.CHOWDECK_API_BASE ?? "https://api.chowdeck.com";
+const APP_VERSION = process.env.CHOWDECK_APP_VERSION ?? "2.0.0";
+const TIMEOUT_MS = Number(process.env.CHOWDECK_TIMEOUT_MS ?? 15000);
+const MAX_RETRIES = Number(process.env.CHOWDECK_MAX_RETRIES ?? 2);
 
 function client(): AxiosInstance {
   const headers: Record<string, string> = {
@@ -18,14 +21,27 @@ function client(): AxiosInstance {
   };
   if (session.token) headers["Authorization"] = `Bearer ${session.token}`;
   if (session.guestId) headers["x-guest-id"] = session.guestId;
-  return axios.create({ baseURL: BASE, headers });
+  const instance = axios.create({ baseURL: BASE, headers, timeout: TIMEOUT_MS });
+  // Retry only transient failures (network errors / 5xx) with linear backoff.
+  // Never retries 4xx; order placement opts out via _noRetry to avoid dupes.
+  instance.interceptors.response.use(undefined, async (error) => {
+    const cfg = error.config as (AxiosRequestConfig & { _retry?: number; _noRetry?: boolean }) | undefined;
+    if (!cfg || cfg._noRetry) throw error;
+    const status = error.response?.status;
+    const transient = status === undefined || status >= 500;
+    cfg._retry = (cfg._retry ?? 0) + 1;
+    if (!transient || cfg._retry > MAX_RETRIES) throw error;
+    await new Promise((r) => setTimeout(r, 400 * cfg._retry!));
+    return instance(cfg);
+  });
+  return instance;
 }
 
 // ── Location / geocoding ───────────────────────────────────────────────────────
 // Chowdeck proxies Google Places autocomplete + details through its own API.
-// Reverse geocoding (current coords -> address) uses Google's public web key
-// embedded in the storefront frontend.
-const MAPS_KEY = "";
+// Reverse geocoding (current coords -> address) needs a Google Maps key. Supply
+// your OWN key via CHOWDECK_MAPS_KEY — never embed a third party's key.
+const MAPS_KEY = process.env.CHOWDECK_MAPS_KEY ?? "";
 
 export async function searchPlaces(input: string) {
   return (await client().get("/place/autocomplete/json", { params: { input } })).data;
@@ -36,15 +52,28 @@ export async function placeDetails(placeId: string) {
 }
 
 export async function reverseGeocode(lat: number, lng: number) {
+  if (!MAPS_KEY) {
+    throw new Error(
+      "Reverse geocoding needs your own Google Maps key (set CHOWDECK_MAPS_KEY). Use search_places to resolve the address instead.",
+    );
+  }
   const url = "https://maps.googleapis.com/maps/api/geocode/json";
-  return (await axios.get(url, { params: { latlng: `${lat},${lng}`, key: MAPS_KEY } })).data;
+  return (await axios.get(url, { params: { latlng: `${lat},${lng}`, key: MAPS_KEY }, timeout: TIMEOUT_MS })).data;
 }
 
 // Rough current location from IP — for SUGGESTION ONLY; never order against it
-// without the user confirming the precise address.
+// without the user confirming the precise address. Uses an HTTPS provider.
 export async function ipLocation() {
-  const r = (await axios.get("http://ip-api.com/json/?fields=status,city,regionName,country,lat,lon,query")).data;
-  return r;
+  const r = (await axios.get("https://ipapi.co/json/", { timeout: TIMEOUT_MS })).data;
+  return {
+    status: r?.error ? "fail" : "success",
+    city: r?.city,
+    regionName: r?.region,
+    country: r?.country_name,
+    lat: r?.latitude,
+    lon: r?.longitude,
+    query: r?.ip,
+  };
 }
 
 function componentsToAddress(result: any, houseNo?: string) {
@@ -162,7 +191,7 @@ export async function createOrUpdateCart(body: {
 }) {
   const payload = {
     source: "web",
-    app_version: "2.0.0",
+    app_version: APP_VERSION,
     class: "delivery",
     address_id: session.addressId,
     ...body,
@@ -191,6 +220,11 @@ export function normalizePhone(phone: string): string {
   if (p.startsWith("234")) p = p.slice(3);
   if (p.length === 10) p = "0" + p; // missing leading zero
   if (!p.startsWith("0")) p = "0" + p;
+  // A Nigerian mobile number is 11 digits (0 + 10). Reject anything else so we
+  // never fire an OTP at a malformed number.
+  if (!/^0\d{10}$/.test(p)) {
+    throw new Error(`"${phone}" is not a valid Nigerian phone number (expected 11 digits, e.g. 08012345678).`);
+  }
   return p;
 }
 
@@ -346,7 +380,7 @@ export async function placeOrder(body: {
 
   const payload: Record<string, unknown> = {
     source: "web",
-    app_version: "2.0.0",
+    app_version: APP_VERSION,
     vendor_id: body.vendor_id,
     cart_id: body.cart_id,
     fee_id: body.fee_id,
@@ -365,7 +399,7 @@ export async function placeOrder(body: {
   if (body.customer_delivery_note) payload.customer_delivery_note = body.customer_delivery_note;
   if (body.split_payment_with_wallet) payload.split_payment_with_wallet = true;
 
-  const res: any = (await client().post("/customer/order", payload)).data;
+  const res: any = (await client().post("/customer/order", payload, { _noRetry: true } as any)).data;
 
   // For online payment, immediately fetch the Paystack checkout link so the
   // order isn't abandoned. The hosted page lets the user pick card/transfer/etc;

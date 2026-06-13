@@ -45,8 +45,15 @@ function load(): SessionState {
 
 function save(state: SessionState) {
   try {
-    fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(state, null, 2));
+    // The file holds a bearer token — keep it private to the current user.
+    fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
+    try {
+      fs.chmodSync(DIR, 0o700);
+      fs.chmodSync(FILE, 0o600);
+    } catch {
+      // chmod may be unsupported (e.g. Windows) — directory ACLs still apply.
+    }
   } catch {
     // persistence is best-effort; in-memory state still works
   }

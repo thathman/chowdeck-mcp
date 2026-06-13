@@ -1,6 +1,6 @@
 {
   "name": "chowdeck-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol (MCP) server for Chowdeck — Nigerian food & grocery delivery. Discover vendors, build carts, place and track orders from an AI agent.",
   "type": "module",
   "main": "dist/index.js",

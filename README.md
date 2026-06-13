@@ -31,6 +31,29 @@ Built and maintained by **[Hendrix Nwaokolo (@thathman)](https://github.com/that
 
 ---
 
+## ⚖️ Disclaimer — unofficial & unaffiliated
+
+> **This is an independent, unofficial project. It is not affiliated with,
+> endorsed by, or supported by Chowdeck.** It talks to Chowdeck's private
+> storefront API the same way the official web app does. As a result:
+>
+> - **No credentials are bundled.** You authenticate as *yourself* with your own
+>   phone + OTP, and supply your own Google Maps key (`CHOWDECK_MAPS_KEY`) for
+>   reverse-geocoding. The project ships no API keys or tokens.
+> - **Respect Chowdeck's Terms of Service.** Use it for your own account and
+>   personal ordering. Don't scrape, resell, automate abusively, or hammer the
+>   API — the client is rate-limit-friendly (timeouts, bounded retries) for that
+>   reason. You are responsible for your own use.
+> - **It may break at any time.** Because the API is private and undocumented,
+>   Chowdeck can change it without notice. Endpoints marked *best-effort* in the
+>   code are inferred and may need updating.
+> - **Trademarks** ("Chowdeck", "Paystack") belong to their owners and are used
+>   only to describe interoperability.
+>
+> If you represent Chowdeck and would like changes, please open an issue.
+
+---
+
 ## 🧭 How it works
 
 ```mermaid
