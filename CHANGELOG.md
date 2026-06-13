@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.4.0] — 2026-06-13
+
+### Added
+- **`track_order`** — compact live status (status, ETA, delivery PIN, rider
+  name/phone, payment status, tracking link) for following a delivery.
+- **Scheduled delivery & tipping** — `place_order` accepts `scheduled_for`
+  (ISO 8601) and `rider_tip` (NGN); both surface in the confirmation prompt.
+- **`validate_promo`** — check a promo/voucher code before checkout; valid codes
+  go to `place_order` via `promo_codes`.
+- **`wallet_topup`** — initialise a wallet top-up (returns a Paystack link);
+  destructive + confirmation-gated.
+
+> Note: scheduled-delivery / tip fields and the promo & wallet-topup endpoints
+> are best-effort (inferred) and may need adjustment against the live API.
+
 ## [0.3.0] — 2026-06-13
 
 ### Added

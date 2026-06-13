@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.3.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.4.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -547,13 +547,52 @@ server.registerTool(
       promo_codes: z.array(z.string()).optional(),
       customer_vendor_note: z.string().optional(),
       customer_delivery_note: z.string().optional(),
+      scheduled_for: z.string().optional().describe("ISO 8601 time to schedule delivery instead of ASAP (best-effort)"),
+      rider_tip: z.number().min(0).optional().describe("Optional tip for the rider, in NGN"),
       ...CONFIRM,
     },
     annotations: DESTRUCTIVE,
   },
   async (args) => {
-    if (!args.confirm) return needConfirm("place this order and charge the selected payment method");
+    if (!args.confirm) {
+      const extra = args.scheduled_for ? ` (scheduled for ${args.scheduled_for})` : "";
+      const tip = args.rider_tip ? ` with a ₦${args.rider_tip} tip` : "";
+      return needConfirm(`place this order and charge the selected payment method${tip}${extra}`);
+    }
     return run(() => api.placeOrder(args));
+  },
+);
+
+server.registerTool(
+  "track_order",
+  {
+    description: "Compact live status of an order: status, ETA, delivery PIN, rider name/phone, payment status, and tracking link. Poll this to follow a delivery.",
+    inputSchema: { order_id: z.string() },
+    annotations: READ,
+  },
+  async ({ order_id }) => run(() => api.trackOrder(order_id)),
+);
+
+server.registerTool(
+  "validate_promo",
+  {
+    description: "Check a promo / voucher code (optionally for a vendor or cart). If valid, pass it to place_order via promo_codes. Best-effort endpoint.",
+    inputSchema: { code: z.string(), vendor_id: z.number().optional(), cart_id: z.number().optional() },
+    annotations: READ,
+  },
+  async ({ code, vendor_id, cart_id }) => run(() => api.validatePromo(code, { vendor_id, cart_id })),
+);
+
+server.registerTool(
+  "wallet_topup",
+  {
+    description: "Initialise a wallet top-up — returns a Paystack link the user completes to add money. DESTRUCTIVE (moves money); requires confirm:true after the user approves the amount. Best-effort endpoint.",
+    inputSchema: { amount: z.number().positive().describe("Amount to add, in NGN"), channel: z.string().default("card"), ...CONFIRM },
+    annotations: DESTRUCTIVE,
+  },
+  async ({ amount, channel, confirm }) => {
+    if (!confirm) return needConfirm(`start a ₦${amount} wallet top-up via ${channel}`);
+    return run(() => api.walletTopup(amount, channel));
   },
 );
 

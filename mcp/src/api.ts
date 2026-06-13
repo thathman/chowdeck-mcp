@@ -346,6 +346,55 @@ export async function getOrder(orderId: string) {
   return (await client().get(`/customer/order/${orderId}`)).data;
 }
 
+// Compact live-tracking view of an order: status, ETA, rider, delivery PIN, and
+// tracking link — shaped from the full order so the agent gets just what matters.
+export async function trackOrder(orderId: string) {
+  const raw: any = await getOrder(orderId);
+  const o = raw?.data ?? raw;
+  if (!o) return raw;
+  const driver = o.driver ?? o.rider ?? {};
+  return {
+    order_id: o.id ?? o.reference ?? orderId,
+    status: o.status ?? o.state,
+    status_label: o.status_label ?? o.tracking_status,
+    placed_at: o.created_at,
+    eta: o.estimated_delivery_time ?? o.eta ?? o.delivery_eta,
+    scheduled_for: o.scheduled_for ?? null,
+    delivery_pin: o.delivery_pin ?? o.pin ?? null,
+    rider: driver?.rider_name || driver?.name || driver?.phone
+      ? { name: driver.rider_name ?? driver.name, phone: driver.phone, lat: driver.latitude, lng: driver.longitude }
+      : null,
+    payment_status: o.payment_status ?? o.payment?.status,
+    total: o.total ?? o.amount ?? o.order_total,
+    vendor: o.vendor?.name ?? o.vendor_name,
+    tracking_url: o.tracking_url ?? (o.id ? `https://chowdeck.com/store/track/${o.id}` : undefined),
+  };
+}
+
+// ── Promo / voucher ─────────────────────────────────────────────────────────
+// Best-effort: validate a promo code (optionally scoped to a vendor/cart). The
+// confirmed code can then be passed to place_order via promo_codes.
+export async function validatePromo(code: string, opts: { vendor_id?: number; cart_id?: number } = {}) {
+  return (await client().post("/customer/promo/validate", {
+    code,
+    vendor_id: opts.vendor_id,
+    cart_id: opts.cart_id,
+    address_id: session.addressId,
+  })).data;
+}
+
+// ── Wallet top-up ───────────────────────────────────────────────────────────
+// Best-effort: initialise a wallet funding transaction. Returns a Paystack
+// authorization_url the user completes to add money. Field/endpoint inferred.
+export async function walletTopup(amount: number, channel = "card") {
+  return (await client().post("/customer/wallet/fund", {
+    amount,
+    currency: "NGN",
+    channel,
+    callback_url: "https://chowdeck.com/store",
+  })).data;
+}
+
 // Initialize a Paystack payment for an unpaid (online_payment) order. Returns
 // access_code + authorization_url (the Paystack checkout link). method is the
 // payment channel name from get_payment_channels, e.g. "card" or "bank_transfer".
@@ -413,6 +462,9 @@ export async function placeOrder(body: {
   customer_vendor_note?: string;
   customer_delivery_note?: string;
   split_payment_with_wallet?: boolean;
+  // Best-effort extras (field names inferred from the storefront; safe to omit).
+  scheduled_for?: string; // ISO 8601 — schedule the delivery instead of ASAP
+  rider_tip?: number; // tip for the rider, in NGN
 }) {
   // Build order_items from the live cart (Chowdeck expects them explicitly).
   const cartRes: any = await getCartByVendor(body.vendor_id);
@@ -441,6 +493,11 @@ export async function placeOrder(body: {
   if (body.customer_vendor_note) payload.customer_vendor_note = body.customer_vendor_note;
   if (body.customer_delivery_note) payload.customer_delivery_note = body.customer_delivery_note;
   if (body.split_payment_with_wallet) payload.split_payment_with_wallet = true;
+  if (body.scheduled_for) {
+    payload.scheduled_for = body.scheduled_for;
+    payload.class = "scheduled"; // best-effort: scheduled orders use a distinct class
+  }
+  if (typeof body.rider_tip === "number" && body.rider_tip > 0) payload.rider_tip = body.rider_tip;
 
   const res: any = (await client().post("/customer/order", payload, { _noRetry: true } as any)).data;
 
