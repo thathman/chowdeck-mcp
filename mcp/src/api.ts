@@ -371,6 +371,19 @@ export async function trackOrder(orderId: string) {
   };
 }
 
+// ── Tip rider ──────────────────────────────────────────────────────────────
+export async function tipRider(orderId: string, amount: number, paymentMethod = "wallet") {
+  return (await client().post(`/customer/order/${orderId}/tip`, {
+    amount,
+    payment_method: paymentMethod,
+  })).data;
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+export async function getNotifications() {
+  return (await client().get("/customer/notification")).data;
+}
+
 // ── Promo / voucher ─────────────────────────────────────────────────────────
 // Best-effort: validate a promo code (optionally scoped to a vendor/cart). The
 // confirmed code can then be passed to place_order via promo_codes.

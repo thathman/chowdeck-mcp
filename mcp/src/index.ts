@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.9.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -571,6 +571,30 @@ server.registerTool(
     annotations: READ,
   },
   async ({ order_id }) => run(() => api.trackOrder(order_id)),
+);
+
+server.registerTool(
+  "tip_rider",
+  {
+    description: "Tip the rider for a completed or in-progress order. Amount in kobo (e.g. 50000 = ₦500). Payment deducted from Chowdeck wallet by default.",
+    inputSchema: {
+      order_id: z.string().describe("Order ID to tip for"),
+      amount: z.number().int().min(100).describe("Tip amount in kobo"),
+      payment_method: z.string().default("wallet").describe("Payment method: wallet, card, etc."),
+    },
+    annotations: WRITE,
+  },
+  async ({ order_id, amount, payment_method }) => run(() => api.tipRider(order_id, amount, payment_method)),
+);
+
+server.registerTool(
+  "get_notifications",
+  {
+    description: "Fetch user notifications (order updates, promos, etc). Returns a list of notification objects.",
+    inputSchema: {},
+    annotations: READ,
+  },
+  async () => run(() => api.getNotifications()),
 );
 
 server.registerTool(

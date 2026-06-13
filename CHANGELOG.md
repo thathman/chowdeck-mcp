@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.9.0] — 2026-06-13
+
+### Added
+- **`tip_rider`** — tip the rider for an order. Amount in kobo, payment from
+  Chowdeck wallet by default.
+- **`get_notifications`** — fetch user notifications (order updates, promos).
+
 ## [0.5.1] — 2026-06-13
 
 ### Changed
