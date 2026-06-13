@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.6.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -263,8 +263,15 @@ server.registerTool(
 
 server.registerTool(
   "get_menu",
-  { description: "List a vendor's full menu.", inputSchema: { vendor_id: z.number() }, annotations: READ },
-  async ({ vendor_id }) => run(() => api.getMenu(vendor_id), { slim: true }),
+  {
+    description: "List a vendor's full menu. Optionally filter by category name (e.g. 'Small Chops', 'Rice', 'Soup') to avoid truncation on large menus.",
+    inputSchema: {
+      vendor_id: z.number(),
+      category: z.string().optional().describe("Filter by category name (case-insensitive partial match)"),
+    },
+    annotations: READ,
+  },
+  async ({ vendor_id, category }) => run(() => api.getMenu(vendor_id, category), { slim: true }),
 );
 
 server.registerTool(

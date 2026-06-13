@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.6.0] — 2026-06-13
+
+### Added
+- **`get_menu` category filter** — optional `category` parameter filters menu
+  items by category name (case-insensitive partial match). Prevents response
+  truncation on large menus (e.g. 133 items at Labule) where items in smaller
+  categories like "Small Chops" were cut off.
+
+### Changed
+- `get_menu` without `category` still returns the full menu (backwards compatible).
+
 ## [0.5.1] — 2026-06-13
 
 ### Changed

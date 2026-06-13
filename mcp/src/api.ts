@@ -155,10 +155,19 @@ export async function getMenuCategories(vendorId: number) {
   return (await client().get(`/customer/vendor/${vendorId}/menu-category`)).data;
 }
 
-export async function getMenu(vendorId: number) {
-  return (await client().get(`/customer/vendor/${vendorId}/menu`, {
+export async function getMenu(vendorId: number, category?: string) {
+  const res = (await client().get(`/customer/vendor/${vendorId}/menu`, {
     params: { return_out_of_stock: 1 },
   })).data;
+  // Client-side category filter: when specified, strip items from other
+  // categories so the response stays small enough to avoid truncation.
+  if (category && res?.data && Array.isArray(res.data)) {
+    const needle = category.toLowerCase();
+    res.data = res.data.filter((item: any) =>
+      item.category?.name?.toLowerCase().includes(needle),
+    );
+  }
+  return res;
 }
 
 export async function getMenuItem(vendorId: number, menuId: number) {
