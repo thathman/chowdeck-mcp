@@ -1,13 +1,14 @@
+#!/usr/bin/env node
 /*!
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │  Chowdeck MCP — Model Context Protocol server for Chowdeck food delivery    │
  * │                                                                            │
  * │  Author : Hendrix Nwaokolo  (@thathman)                                    │
- * │  Contact: hello@airixmmedia.com                                      │
+ * │  Contact: hello@airixmedia.com                                             │
  * │  Source : https://github.com/thathman/chowdeck-mcp                         │
- * │  License: CC BY 4.0 — copy/adapt freely WITH attribution to the author.    │
+ * │  License: MIT — see LICENSE.                                                │
  * │                                                                            │
- * │  © 2026 Hendrix Nwaokolo.  Watermark: THATHMAN·CHOWDECK·MCP                 │
+ * │  © 2026 Hendrix Nwaokolo.  Unofficial; not affiliated with Chowdeck.        │
  * └──────────────────────────────────────────────────────────────────────────┘
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -16,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.1.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.1.2" });
 
 function json(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -365,7 +366,7 @@ server.tool(
 
 // Watermark banner -> stderr only (stdout is reserved for the MCP protocol).
 process.stderr.write(
-  "Chowdeck MCP · by Hendrix Nwaokolo (@thathman) · CC BY 4.0 · THATHMAN·CHOWDECK·MCP\n",
+  "Chowdeck MCP · by Hendrix Nwaokolo (@thathman) · MIT · unofficial, not affiliated with Chowdeck\n",
 );
 
 const transport = new StdioServerTransport();

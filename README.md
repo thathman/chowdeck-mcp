@@ -6,7 +6,7 @@
 > order, and track delivery.
 
 [![CI](https://github.com/thathman/chowdeck-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thathman/chowdeck-mcp/actions/workflows/ci.yml)
-[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-blue.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa.svg)](https://github.com/sponsors/thathman)
 
 Built and maintained by **[Hendrix Nwaokolo (@thathman)](https://github.com/thathman)**.
@@ -119,7 +119,7 @@ chowdeck-mcp/
 │   ├── workflows/ci.yml      # Build + smoke-test on push/PR
 │   └── FUNDING.yml           # Sponsorship
 ├── CHANGELOG.md
-├── LICENSE                   # CC BY 4.0
+├── LICENSE                   # MIT
 └── README.md
 ```
 
@@ -221,17 +221,9 @@ If this saves you time, consider [sponsoring the project](https://github.com/spo
 
 ## 📄 License & attribution
 
-Licensed under **[Creative Commons Attribution 4.0 International (CC BY 4.0)](./LICENSE)** —
-you may copy, adapt, and reuse this work (including commercially) **as long as you
-credit the author**.
+Licensed under the **[MIT License](./LICENSE)** — free to use, copy, modify, and
+distribute (including commercially); just keep the copyright and license notice.
 
-> _"Based on Chowdeck MCP by Hendrix Nwaokolo (@thathman) —
-> https://github.com/thathman/chowdeck-mcp — licensed under CC BY 4.0."_
+Built and maintained by **[Hendrix Nwaokolo (@thathman)](https://github.com/thathman)**
+/ [Airix Media](https://airixmedia.com). A credit or ⭐ is always appreciated.
 
----
-
-## ⚖️ Disclaimer
-
-This is an independent, **unofficial** integration. It is not affiliated with,
-endorsed by, or sponsored by Chowdeck. Use it in compliance with Chowdeck's Terms
-of Service and at your own risk.

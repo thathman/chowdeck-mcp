@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.1.2] — 2026-06-13
+
+### Changed
+- **License changed from CC-BY-4.0 to MIT** — Creative Commons is not intended
+  for software; MIT is the right fit for a code library. `LICENSE`, badges, and
+  source headers updated.
+
+### Fixed
+- **CLI shebang** — `dist/index.js` now starts with `#!/usr/bin/env node` and is
+  marked executable, so `npx chowdeck-mcp` / the `bin` entry actually runs.
+- Corrected the author contact email typo (`airixmmedia` → `airixmedia`).
+
+### Added
+- `engines.node >= 18` in `package.json`.
+
 ## [0.1.1] — 2026-06-13
 
 ### Security

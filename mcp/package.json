@@ -1,6 +1,6 @@
 {
   "name": "chowdeck-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Model Context Protocol (MCP) server for Chowdeck — Nigerian food & grocery delivery. Discover vendors, build carts, place and track orders from an AI agent.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,8 +12,11 @@
     "README.md",
     "LICENSE"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch{}\"",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build"
@@ -27,8 +30,8 @@
     "claude",
     "ai-agent"
   ],
-  "author": "Hendrix Nwaokolo (@thathman) <hello@airixmmedia.com>",
-  "license": "CC-BY-4.0",
+  "author": "Hendrix Nwaokolo (@thathman) <hello@airixmedia.com>",
+  "license": "MIT",
   "homepage": "https://github.com/thathman/chowdeck-mcp#readme",
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 /*!
  * Chowdeck MCP · API client
- * Author: Hendrix Nwaokolo (@thathman) <hello@airixmmedia.com>
- * License: CC BY 4.0 — copy/adapt with attribution. © 2026 Hendrix Nwaokolo.
+ * Author: Hendrix Nwaokolo (@thathman) <hello@airixmedia.com>
+ * License: MIT. © 2026 Hendrix Nwaokolo.
  * Watermark: THATHMAN·CHOWDECK·MCP
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
