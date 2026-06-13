@@ -182,23 +182,22 @@ claude mcp add chowdeck -- node /absolute/path/to/chowdeck-mcp/mcp/dist/index.js
 Add that block to your client's MCP config (for OpenClaw, its MCP servers
 settings), then restart the client. The agent will then see the `chowdeck` tools.
 
-### One-line install via npx (after publishing to npm)
+### One-line install via npx
 
-Once this package is published to npm (`npm publish` from `mcp/`), no clone or
-build is needed — clients can launch it directly:
+Published to npm as **[`@thathman/chowdeck-mcp`](https://www.npmjs.com/package/@thathman/chowdeck-mcp)** —
+no clone or build needed; clients launch it directly:
 
 ```json
 {
   "mcpServers": {
     "chowdeck": {
       "command": "npx",
-      "args": ["-y", "chowdeck-mcp"]
+      "args": ["-y", "@thathman/chowdeck-mcp"],
+      "env": { "CHOWDECK_MAPS_KEY": "your-google-maps-key (optional, for reverse_geocode)" }
     }
   }
 }
 ```
-
-Until then, use the build-from-source steps above.
 
 ### As an agent skill
 The bundled [`skill/chowdeck/SKILL.md`](./skill/chowdeck/SKILL.md) tells the agent

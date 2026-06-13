@@ -1,11 +1,14 @@
 {
-  "name": "chowdeck-mcp",
-  "version": "0.5.0",
-  "description": "Model Context Protocol (MCP) server for Chowdeck — Nigerian food & grocery delivery. Discover vendors, build carts, place and track orders from an AI agent.",
+  "name": "@thathman/chowdeck-mcp",
+  "version": "0.5.1",
+  "description": "Unofficial Model Context Protocol (MCP) server for Chowdeck (Nigeria) — discover vendors, build carts, place and track orders from an AI agent. Not affiliated with Chowdeck.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "chowdeck-mcp": "dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist",
@@ -19,6 +22,7 @@
     "build": "tsc && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch{}\"",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
+    "prepack": "cp ../README.md ../LICENSE .",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

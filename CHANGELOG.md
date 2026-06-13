@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.5.1] — 2026-06-13
+
+### Changed
+- **Published to npm as the scoped package `@thathman/chowdeck-mcp`** (`publishConfig.access: public`).
+- Description now leads with **"Unofficial … Not affiliated with Chowdeck."**
+- `prepack` copies `README.md` + `LICENSE` into the package so they ship in the
+  npm tarball (the package root is `mcp/`).
+- README `npx` instructions updated to the scoped name.
+
 ## [0.5.0] — 2026-06-13
 
 ### Added

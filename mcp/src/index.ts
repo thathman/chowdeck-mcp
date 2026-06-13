@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 

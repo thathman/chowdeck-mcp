@@ -22,3 +22,7 @@ workspace.md
 Thumbs.db
 .idea/
 .vscode/
+
+# Copied in at pack time (see prepack)
+mcp/README.md
+mcp/LICENSE
