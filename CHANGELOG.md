@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.2.0] — 2026-06-13
+
+### Added
+- **Tool annotations** — every tool is now hinted `readOnlyHint` or
+  `destructiveHint` so hosts can gate the dangerous ones.
+- **Confirmation gate** on destructive / money-moving tools (`place_order`,
+  `clear_carts`, `delete_cart`, `logout`). They stay callable but only execute
+  with `confirm: true`, which the agent should set only after the user approves;
+  otherwise they return a "confirm first" no-op.
+- **Structured output** (`outputSchema` + `structuredContent`) on `get_session`
+  and `get_setup_status` for machine-readable results.
+
+### Changed
+- Migrated all 38 tools to the modern `registerTool` API.
+- **Response slimming** — discovery/list/menu responses are recursively trimmed
+  (heavy media keys dropped, long strings truncated, arrays capped at 60) to cut
+  token usage without losing the fields agents reason over.
+- `update_cart` quantities are validated (`1..99`, integer).
+
 ## [0.1.2] — 2026-06-13
 
 ### Changed

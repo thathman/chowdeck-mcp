@@ -17,178 +17,305 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.1.2" });
+const server = new McpServer({ name: "chowdeck", version: "0.2.0" });
 
-function json(data: unknown) {
+// ── Result helpers ──────────────────────────────────────────────────────────
+
+function res(data: unknown): { content: { type: "text"; text: string }[]; structuredContent?: any } {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
 
-async function run(fn: () => Promise<unknown>) {
+/**
+ * Recursively drop bulky/irrelevant fields and cap array sizes so large API
+ * responses (menus, vendor lists) don't flood the model context. Shape-agnostic
+ * and lossless for the fields an agent actually reasons over.
+ */
+const HEAVY_KEYS = new Set([
+  "image", "images", "image_url", "banner", "banner_url", "photo", "photos",
+  "thumbnail", "cover", "cover_image", "logo", "icon", "media", "html",
+]);
+function slim(value: any, depth = 0): any {
+  if (Array.isArray(value)) {
+    return value.slice(0, 60).map((v) => slim(v, depth + 1));
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (HEAVY_KEYS.has(k)) continue;
+      if (typeof v === "string" && v.length > 400) {
+        out[k] = v.slice(0, 400) + "…";
+      } else {
+        out[k] = slim(v, depth + 1);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
+async function run(fn: () => Promise<unknown>, opts: { slim?: boolean } = {}) {
   try {
-    return json(await fn());
+    const data = await fn();
+    return res(opts.slim ? slim(data) : data);
   } catch (err: any) {
     const detail = err?.response?.data ?? err?.message ?? String(err);
-    return { ...json({ error: detail }), isError: true };
+    return { ...res({ error: detail }), isError: true };
   }
 }
 
+/**
+ * Confirmation gate for destructive / money-moving tools. They remain fully
+ * callable by the agent, but only execute once `confirm:true` is passed — which
+ * the agent should set ONLY after the user has explicitly approved.
+ */
+const CONFIRM = {
+  confirm: z
+    .boolean()
+    .default(false)
+    .describe("Set true ONLY after the user has explicitly approved this action. Without it, the call is a no-op that asks you to confirm first."),
+};
+function needConfirm(action: string) {
+  return res({
+    needs_confirmation: true,
+    message: `This will ${action}. Confirm the details with the user first, then call again with confirm: true.`,
+  });
+}
+
+const READ = { readOnlyHint: true, openWorldHint: true } as const;
+const WRITE = { readOnlyHint: false, openWorldHint: true } as const;
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, openWorldHint: true } as const;
+
 // ── Session / address ─────────────────────────────────────────────────────────
 
-server.tool(
+server.registerTool(
   "set_address",
-  "Create a delivery address (works as guest). Stores the address id for later calls.",
   {
-    street: z.string(),
-    pretty_name: z.string(),
-    latitude: z.number(),
-    longitude: z.number(),
-    city: z.string(),
-    state: z.string(),
-    country: z.string().default("Nigeria"),
-    house_no: z.string().optional(),
-    area: z.string().optional(),
+    description: "Create a delivery address (works as guest). Stores the address id for later calls.",
+    inputSchema: {
+      street: z.string(),
+      pretty_name: z.string(),
+      latitude: z.number(),
+      longitude: z.number(),
+      city: z.string(),
+      state: z.string(),
+      country: z.string().default("Nigeria"),
+      house_no: z.string().optional(),
+      area: z.string().optional(),
+    },
+    annotations: WRITE,
   },
   async (args) => run(() => api.createAddress(args)),
 );
 
-server.tool(
+server.registerTool(
   "get_session",
-  "Show current session state. Call this FIRST: if setup_complete is false, run the first-time setup flow (login + address).",
-  {},
-  async () =>
-    json({
+  {
+    description: "Show current session state. Call this FIRST: if setup_complete is false, run the first-time setup flow (login + address).",
+    inputSchema: {},
+    outputSchema: {
+      authenticated: z.boolean(),
+      phone: z.string().nullable().optional(),
+      guest_id: z.string().nullable().optional(),
+      address_id: z.number().nullable().optional(),
+      payment_pref: z.any().optional(),
+      setup_complete: z.boolean(),
+    },
+    annotations: READ,
+  },
+  async () => {
+    const data = {
       authenticated: !!session.token,
       phone: session.phone,
       guest_id: session.guestId,
       address_id: session.addressId,
       payment_pref: session.paymentPref,
       setup_complete: !!session.token && !!session.addressId,
-    }),
+    };
+    return { ...res(data), structuredContent: data };
+  },
 );
 
-server.tool("logout", "Clear the saved session (token, address, guest id) from disk.", {}, async () => {
-  clearSession();
-  return json({ ok: true });
-});
+server.registerTool(
+  "logout",
+  {
+    description: "Clear the saved session (token, address, guest id) from disk. Requires confirm:true.",
+    inputSchema: { ...CONFIRM },
+    annotations: DESTRUCTIVE,
+  },
+  async ({ confirm }) => {
+    if (!confirm) return needConfirm("log out and erase the saved session (you'll need to log in again)");
+    clearSession();
+    return res({ ok: true });
+  },
+);
 
 // ── Location / geocoding ───────────────────────────────────────────────────────
 
-server.tool(
+server.registerTool(
   "search_places",
-  "Search delivery addresses by text (Chowdeck place autocomplete). Returns predictions with place_id and description. Show these to the user and let THEM pick the correct one.",
-  { input: z.string() },
+  {
+    description: "Search delivery addresses by text (Chowdeck place autocomplete). Returns predictions with place_id and description. Show these to the user and let THEM pick the correct one.",
+    inputSchema: { input: z.string() },
+    annotations: READ,
+  },
   async ({ input }) => run(() => api.searchPlaces(input)),
 );
 
-server.tool(
+server.registerTool(
   "place_details",
-  "Get the exact coordinates and formatted address for a place_id from search_places.",
-  { place_id: z.string() },
+  {
+    description: "Get the exact coordinates and formatted address for a place_id from search_places.",
+    inputSchema: { place_id: z.string() },
+    annotations: READ,
+  },
   async ({ place_id }) => run(() => api.placeDetails(place_id)),
 );
 
-server.tool(
+server.registerTool(
   "reverse_geocode",
-  "Turn precise device coordinates (lat/lng) into address candidates. Use when the host can provide the user's current GPS location.",
-  { latitude: z.number(), longitude: z.number() },
+  {
+    description: "Turn precise device coordinates (lat/lng) into address candidates. Needs CHOWDECK_MAPS_KEY. Use when the host can provide the user's current GPS location.",
+    inputSchema: { latitude: z.number(), longitude: z.number() },
+    annotations: READ,
+  },
   async ({ latitude, longitude }) => run(() => api.reverseGeocode(latitude, longitude)),
 );
 
-server.tool(
+server.registerTool(
   "suggest_current_location",
-  "Rough current city from IP — SUGGESTION ONLY, not delivery-accurate. Use it to seed a search_places query, then have the user confirm the precise address.",
-  {},
+  {
+    description: "Rough current city from IP — SUGGESTION ONLY, not delivery-accurate. Use it to seed a search_places query, then have the user confirm the precise address.",
+    inputSchema: {},
+    annotations: READ,
+  },
   async () => run(() => api.ipLocation()),
 );
 
-server.tool(
+server.registerTool(
   "set_address_from_place",
-  "Resolve a place_id to exact coordinates and save it as the delivery address. Preferred over set_address — guarantees real coordinates for delivery.",
-  { place_id: z.string(), house_no: z.string().optional() },
+  {
+    description: "Resolve a place_id to exact coordinates and save it as the delivery address. Preferred over set_address — guarantees real coordinates for delivery.",
+    inputSchema: { place_id: z.string(), house_no: z.string().optional() },
+    annotations: WRITE,
+  },
   async ({ place_id, house_no }) => run(() => api.setAddressFromPlace(place_id, house_no)),
 );
 
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
-server.tool("get_config", "Fetch storefront config (verticals, currencies, feature flags).", {}, async () =>
-  run(() => api.getConfig()),
+server.registerTool(
+  "get_config",
+  { description: "Fetch storefront config (verticals, currencies, feature flags).", inputSchema: {}, annotations: READ },
+  async () => run(() => api.getConfig(), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "list_vendors",
-  "List vendors (restaurants, shops, pharmacies...) near the current address.",
   {
-    vendor_type: z.string().optional(),
-    tag: z.string().optional(),
-    q: z.string().optional(),
-    address_id: z.number().optional(),
+    description: "List vendors (restaurants, shops, pharmacies...) near the current address.",
+    inputSchema: { vendor_type: z.string().optional(), tag: z.string().optional(), q: z.string().optional(), address_id: z.number().optional() },
+    annotations: READ,
   },
-  async (args) => run(() => api.getVendors(args)),
+  async (args) => run(() => api.getVendors(args), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "featured_vendors",
-  "List featured/handpicked/explore vendors near the current address.",
-  { tag: z.enum(["featured", "handpicked", "explore"]) },
-  async ({ tag }) => run(() => api.getFeaturedVendors(tag)),
+  {
+    description: "List featured/handpicked/explore vendors near the current address.",
+    inputSchema: { tag: z.enum(["featured", "handpicked", "explore"]) },
+    annotations: READ,
+  },
+  async ({ tag }) => run(() => api.getFeaturedVendors(tag), { slim: true }),
 );
 
-server.tool("search", "Search vendors and meals near the current address.", { q: z.string() }, async ({ q }) =>
-  run(() => api.searchVendors(q)),
+server.registerTool(
+  "search",
+  { description: "Search vendors and meals near the current address.", inputSchema: { q: z.string() }, annotations: READ },
+  async ({ q }) => run(() => api.searchVendors(q), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "get_menu_categories",
-  "List menu categories for a vendor.",
-  { vendor_id: z.number() },
-  async ({ vendor_id }) => run(() => api.getMenuCategories(vendor_id)),
+  { description: "List menu categories for a vendor.", inputSchema: { vendor_id: z.number() }, annotations: READ },
+  async ({ vendor_id }) => run(() => api.getMenuCategories(vendor_id), { slim: true }),
 );
 
-server.tool("get_menu", "List a vendor's full menu.", { vendor_id: z.number() }, async ({ vendor_id }) =>
-  run(() => api.getMenu(vendor_id)),
+server.registerTool(
+  "get_menu",
+  { description: "List a vendor's full menu.", inputSchema: { vendor_id: z.number() }, annotations: READ },
+  async ({ vendor_id }) => run(() => api.getMenu(vendor_id), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "get_menu_item",
-  "Get full details for one menu item (options, add-ons, price).",
-  { vendor_id: z.number(), menu_id: z.number() },
-  async ({ vendor_id, menu_id }) => run(() => api.getMenuItem(vendor_id, menu_id)),
+  {
+    description: "Get full details for one menu item (options, add-ons, price).",
+    inputSchema: { vendor_id: z.number(), menu_id: z.number() },
+    annotations: READ,
+  },
+  async ({ vendor_id, menu_id }) => run(() => api.getMenuItem(vendor_id, menu_id), { slim: true }),
 );
 
 // ── Cart ──────────────────────────────────────────────────────────────────────
 
-server.tool("get_carts", "List all carts for the current session.", {}, async () => run(() => api.getCarts()));
-
-server.tool("clear_carts", "Delete all carts for the current session.", {}, async () => run(() => api.clearCarts()));
-
-server.tool("delete_cart", "Delete one cart by id.", { cart_id: z.number() }, async ({ cart_id }) =>
-  run(() => api.deleteCart(cart_id)),
+server.registerTool("get_carts", { description: "List all carts for the current session.", inputSchema: {}, annotations: READ }, async () =>
+  run(() => api.getCarts(), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
+  "clear_carts",
+  { description: "Delete ALL carts for the current session. Requires confirm:true.", inputSchema: { ...CONFIRM }, annotations: DESTRUCTIVE },
+  async ({ confirm }) => {
+    if (!confirm) return needConfirm("delete every cart in the current session");
+    return run(() => api.clearCarts());
+  },
+);
+
+server.registerTool(
+  "delete_cart",
+  { description: "Delete one cart by id. Requires confirm:true.", inputSchema: { cart_id: z.number(), ...CONFIRM }, annotations: DESTRUCTIVE },
+  async ({ cart_id, confirm }) => {
+    if (!confirm) return needConfirm(`delete cart ${cart_id}`);
+    return run(() => api.deleteCart(cart_id));
+  },
+);
+
+server.registerTool(
   "get_vendor_cart",
-  "Get the cart for one vendor.",
-  { vendor_id: z.number() },
-  async ({ vendor_id }) => run(() => api.getCartByVendor(vendor_id)),
+  { description: "Get the cart for one vendor.", inputSchema: { vendor_id: z.number() }, annotations: READ },
+  async ({ vendor_id }) => run(() => api.getCartByVendor(vendor_id), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "update_cart",
-  "Create or update a cart with items for a vendor. Works as guest after set_address.",
   {
-    vendor_id: z.number(),
-    items: z.array(z.object({ item_id: z.number(), quantity: z.number(), type: z.string().default("menu") })),
-    address_id: z.number().optional(),
+    description: "Create or update a cart with items for a vendor. Works as guest after set_address.",
+    inputSchema: {
+      vendor_id: z.number(),
+      items: z.array(
+        z.object({
+          item_id: z.number(),
+          quantity: z.number().int().min(1).max(99),
+          type: z.string().default("menu"),
+        }),
+      ),
+      address_id: z.number().optional(),
+    },
+    annotations: WRITE,
   },
   async (args) => run(() => api.createOrUpdateCart(args)),
 );
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-server.tool(
+server.registerTool(
   "login_send_otp",
-  "Start phone login: validates the phone and sends an OTP via SMS/WhatsApp.",
-  { phone: z.string(), country_code: z.string().default("NG") },
+  {
+    description: "Start phone login: validates the phone and sends an OTP via SMS/WhatsApp.",
+    inputSchema: { phone: z.string(), country_code: z.string().default("NG") },
+    annotations: WRITE,
+  },
   async ({ phone, country_code }) =>
     run(async () => {
       await api.validatePhone(phone, country_code);
@@ -196,26 +323,49 @@ server.tool(
     }),
 );
 
-server.tool(
+server.registerTool(
   "login_verify_otp",
-  "Complete login with the OTP the user received. Stores the bearer token in session.",
-  { phone: z.string(), otp: z.string(), country_code: z.string().default("NG") },
+  {
+    description: "Complete login with the OTP the user received. Stores the bearer token in session.",
+    inputSchema: { phone: z.string(), otp: z.string(), country_code: z.string().default("NG") },
+    annotations: WRITE,
+  },
   async ({ phone, otp, country_code }) =>
     run(async () => {
-      const res = await api.verifyOtp(phone, otp, country_code);
+      const result = await api.verifyOtp(phone, otp, country_code);
       if (session.token) session.phone = phone;
-      return res;
+      return result;
     }),
 );
 
-server.tool("get_me", "Get the authenticated user's profile.", {}, async () => run(() => api.getMe()));
+server.registerTool("get_me", { description: "Get the authenticated user's profile.", inputSchema: {}, annotations: READ }, async () =>
+  run(() => api.getMe(), { slim: true }),
+);
 
 // ── Account / setup ─────────────────────────────────────────────────────────────
 
-server.tool(
+server.registerTool(
   "get_setup_status",
-  "Call this FIRST every conversation. Aggregates auth, address, saved payment, wallet, order count, and payment preference. If not authenticated or no address, run first-time setup. After login it also tells you whether the user is NEW (empty account) or RETURNING (has saved data).",
-  {},
+  {
+    description:
+      "Call this FIRST every conversation. Aggregates auth, address, saved payment, wallet, order count, and payment preference. If not authenticated or no address, run first-time setup. After login it also tells you whether the user is NEW (empty account) or RETURNING (has saved data).",
+    inputSchema: {},
+    outputSchema: {
+      authenticated: z.boolean(),
+      phone: z.string().nullable().optional(),
+      address_id: z.number().nullable().optional(),
+      payment_pref: z.any().optional(),
+      setup_complete: z.boolean(),
+      user_type: z.enum(["new", "returning"]).optional(),
+      address_count: z.number().optional(),
+      saved_payment_count: z.number().optional(),
+      wallet_balance: z.any().optional(),
+      order_count: z.number().optional(),
+      next: z.string().optional(),
+      warning: z.string().optional(),
+    },
+    annotations: READ,
+  },
   async () => {
     const out: any = {
       authenticated: !!session.token,
@@ -226,7 +376,7 @@ server.tool(
     };
     if (!session.token) {
       out.next = "Not logged in. Run login_send_otp -> login_verify_otp.";
-      return json(out);
+      return { ...res(out), structuredContent: out };
     }
     try {
       const [addrRes, payRes, walletRes, ordersRes] = await Promise.allSettled([
@@ -241,12 +391,9 @@ server.tool(
       const orders = (ordersRes.status === "fulfilled" && ((ordersRes.value as any)?.data ?? [])) || [];
       out.address_count = addresses.length;
       out.saved_payment_count = Array.isArray(methods) ? methods.length : 0;
-      out.wallet_balance = wallet
-        ? { total: wallet.total_balance, ...wallet.balances, currency: wallet.currency }
-        : null;
+      out.wallet_balance = wallet ? { total: wallet.total_balance, ...wallet.balances, currency: wallet.currency } : null;
       out.order_count = Array.isArray(orders) ? orders.length : 0;
-      out.user_type =
-        addresses.length > 0 || out.saved_payment_count > 0 || out.order_count > 0 ? "returning" : "new";
+      out.user_type = addresses.length > 0 || out.saved_payment_count > 0 || out.order_count > 0 ? "returning" : "new";
       out.next =
         out.user_type === "returning"
           ? "Returning user. Confirm the active address (get_active_address) and, if payment_pref is null, ask once and call set_payment_pref."
@@ -254,113 +401,136 @@ server.tool(
     } catch (err: any) {
       out.warning = "Could not load full account profile: " + (err?.message ?? String(err));
     }
-    return json(out);
+    return { ...res(out), structuredContent: out };
   },
 );
 
-server.tool("list_addresses", "List the user's saved addresses (requires login).", {}, async () =>
-  run(() => api.listAddresses()),
+server.registerTool("list_addresses", { description: "List the user's saved addresses (requires login).", inputSchema: {}, annotations: READ }, async () =>
+  run(() => api.listAddresses(), { slim: true }),
 );
 
-server.tool(
+server.registerTool(
   "get_active_address",
-  "Get the account's active/last-used address — the default delivery target. Confirm it with the user before ordering.",
-  {},
+  {
+    description: "Get the account's active/last-used address — the default delivery target. Confirm it with the user before ordering.",
+    inputSchema: {},
+    annotations: READ,
+  },
   async () => run(() => api.getActiveAddress()),
 );
 
-server.tool(
+server.registerTool(
   "use_address",
-  "Select a saved address as the active delivery address for this session (sets session.addressId and marks it active on Chowdeck). Use for returning users instead of creating a new address.",
-  { address_id: z.number() },
+  {
+    description: "Select a saved address as the active delivery address for this session (sets session.addressId and marks it active on Chowdeck). Use for returning users instead of creating a new address.",
+    inputSchema: { address_id: z.number() },
+    annotations: WRITE,
+  },
   async ({ address_id }) =>
     run(async () => {
-      const res = await api.setActiveAddress(address_id).catch(() => null);
+      const r = await api.setActiveAddress(address_id).catch(() => null);
       session.addressId = address_id;
-      return { ok: true, address_id, set_active: res ?? "skipped" };
+      return { ok: true, address_id, set_active: r ?? "skipped" };
     }),
 );
 
-server.tool("get_wallet", "Get the user's wallet balance (requires login).", {}, async () => run(() => api.getWallet()));
-
-server.tool(
-  "get_order_history",
-  "List past orders (requires login). Optional status filter, e.g. 'completed'.",
-  { status: z.string().optional() },
-  async ({ status }) => run(() => api.getOrderHistory(status)),
+server.registerTool("get_wallet", { description: "Get the user's wallet balance (requires login).", inputSchema: {}, annotations: READ }, async () =>
+  run(() => api.getWallet()),
 );
 
-server.tool(
+server.registerTool(
+  "get_order_history",
+  { description: "List past orders (requires login). Optional status filter, e.g. 'completed'.", inputSchema: { status: z.string().optional() }, annotations: READ },
+  async ({ status }) => run(() => api.getOrderHistory(status), { slim: true }),
+);
+
+server.registerTool(
   "set_payment_pref",
-  "Save the user's payment preference. mode 'default' = auto-use the chosen saved method (still confirm total); mode 'ask' = pick a method every order.",
   {
-    mode: z.enum(["default", "ask"]),
-    method_id: z.number().optional(),
-    method_label: z.string().optional(),
+    description: "Save the user's payment preference. mode 'default' = auto-use the chosen saved method (still confirm total); mode 'ask' = pick a method every order.",
+    inputSchema: { mode: z.enum(["default", "ask"]), method_id: z.number().optional(), method_label: z.string().optional() },
+    annotations: WRITE,
   },
   async ({ mode, method_id, method_label }) => {
     session.paymentPref = { mode, methodId: method_id, methodLabel: method_label };
-    return json({ ok: true, payment_pref: session.paymentPref });
+    return res({ ok: true, payment_pref: session.paymentPref });
   },
 );
 
 // ── Orders / checkout ─────────────────────────────────────────────────────────
 
-server.tool("get_active_orders", "List the user's active orders (requires login).", {}, async () =>
-  run(() => api.getActiveOrders()),
+server.registerTool("get_active_orders", { description: "List the user's active orders (requires login).", inputSchema: {}, annotations: READ }, async () =>
+  run(() => api.getActiveOrders(), { slim: true }),
 );
 
-server.tool("get_order", "Get one order by id.", { order_id: z.string() }, async ({ order_id }) =>
-  run(() => api.getOrder(order_id)),
+server.registerTool("get_order", { description: "Get one order by id.", inputSchema: { order_id: z.string() }, annotations: READ }, async ({ order_id }) =>
+  run(() => api.getOrder(order_id), { slim: true }),
 );
 
-server.tool("get_payment_methods", "List saved payment methods (requires login).", {}, async () =>
+server.registerTool("get_payment_methods", { description: "List saved payment methods (requires login).", inputSchema: {}, annotations: READ }, async () =>
   run(() => api.getPaymentMethods()),
 );
 
-server.tool(
+server.registerTool(
   "get_delivery_fee",
-  "Quote the delivery fee for a vendor to the current address. Pass cart_id from the cart. Returns a fee object whose id is the fee_id needed for place_order.",
-  { vendor_id: z.number(), cart_id: z.number().optional(), source_id: z.number().optional() },
+  {
+    description: "Quote the delivery fee for a vendor to the current address. Pass cart_id from the cart. Returns a fee object whose id is the fee_id needed for place_order.",
+    inputSchema: { vendor_id: z.number(), cart_id: z.number().optional(), source_id: z.number().optional() },
+    annotations: READ,
+  },
   async (args) => run(() => api.getDeliveryFee(args)),
 );
 
-server.tool(
+server.registerTool(
   "place_order",
-  "Place an order from a cart (requires login). STABLE for returning customers paying with a saved card (payment_method 'card' + payment_method_id) — charges inline. Online payment (online_payment / bank_transfer / pay_for_me) is IN PROGRESS: the order is created unpaid; use pay_for_me to get a hosted payment link.",
   {
-    vendor_id: z.number(),
-    cart_id: z.number(),
-    fee_id: z.number(),
-    payment_method: z.string(),
-    payment_method_id: z.number().optional(),
-    online_channel: z.string().optional(),
-    address_id: z.number().optional(),
-    promo_codes: z.array(z.string()).optional(),
-    customer_vendor_note: z.string().optional(),
-    customer_delivery_note: z.string().optional(),
+    description:
+      "Place an order from a cart (requires login). DESTRUCTIVE — charges money. Requires confirm:true, which you should set ONLY after confirming items, vendor, delivery fee, and total with the user. STABLE for returning customers paying with a saved card (payment_method 'card' + payment_method_id). Online payment (online_payment / bank_transfer / pay_for_me) creates an unpaid order; use pay_for_me for a hosted link.",
+    inputSchema: {
+      vendor_id: z.number(),
+      cart_id: z.number(),
+      fee_id: z.number(),
+      payment_method: z.string(),
+      payment_method_id: z.number().optional(),
+      online_channel: z.string().optional(),
+      address_id: z.number().optional(),
+      promo_codes: z.array(z.string()).optional(),
+      customer_vendor_note: z.string().optional(),
+      customer_delivery_note: z.string().optional(),
+      ...CONFIRM,
+    },
+    annotations: DESTRUCTIVE,
   },
-  async (args) => run(() => api.placeOrder(args)),
+  async (args) => {
+    if (!args.confirm) return needConfirm("place this order and charge the selected payment method");
+    return run(() => api.placeOrder(args));
+  },
 );
 
-server.tool(
+server.registerTool(
   "get_payment_channels",
-  "List available payment channels (card, bank_transfer, ussd, opay...). Each name is a valid `method` for start_order_payment.",
-  {},
+  {
+    description: "List available payment channels (card, bank_transfer, ussd, opay...). Each name is a valid `method` for start_order_payment.",
+    inputSchema: {},
+    annotations: READ,
+  },
   async () => run(() => api.getPaymentChannels()),
 );
 
-server.tool(
+server.registerTool(
   "start_order_payment",
-  "Initialize a Paystack payment for an unpaid order (placed with payment_method 'online_payment'). Returns authorization_url (the Paystack checkout link) + access_code. method = a channel name like 'card' or 'bank_transfer'. Call PROMPTLY after place_order — unpaid orders are abandoned within minutes.",
-  { order_id: z.number(), method: z.string(), callback_url: z.string().optional() },
+  {
+    description:
+      "Initialize a Paystack payment for an unpaid order (placed with payment_method 'online_payment'). Returns authorization_url (the Paystack checkout link) + access_code. method = a channel name like 'card' or 'bank_transfer'. Call PROMPTLY after place_order — unpaid orders are abandoned within minutes.",
+    inputSchema: { order_id: z.number(), method: z.string(), callback_url: z.string().optional() },
+    annotations: WRITE,
+  },
   async ({ order_id, method, callback_url }) => run(() => api.startOrderPayment(order_id, method, callback_url)),
 );
 
-server.tool(
+server.registerTool(
   "verify_payment",
-  "Verify a payment transaction status.",
-  { transaction_id: z.string() },
+  { description: "Verify a payment transaction status.", inputSchema: { transaction_id: z.string() }, annotations: READ },
   async ({ transaction_id }) => run(() => api.verifyPayment(transaction_id)),
 );
 
