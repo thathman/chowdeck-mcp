@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.8.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -571,6 +571,19 @@ server.registerTool(
     annotations: READ,
   },
   async ({ order_id }) => run(() => api.trackOrder(order_id)),
+);
+
+server.registerTool(
+  "cancel_order",
+  {
+    description: "Cancel a placed order. Requires a reason. Refund goes to Chowdeck wallet. Only works on non-fulfilled orders.",
+    inputSchema: {
+      order_id: z.string().describe("Order ID to cancel"),
+      reason: z.string().describe("Reason for cancellation"),
+    },
+    annotations: WRITE,
+  },
+  async ({ order_id, reason }) => run(() => api.cancelOrder(order_id, reason)),
 );
 
 server.registerTool(

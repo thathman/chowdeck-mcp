@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.8.0] — 2026-06-13
+
+### Added
+- **`cancel_order`** — cancel a placed order by ID with a reason. Refund goes to
+  Chowdeck wallet. Only works on non-fulfilled orders.
+
 ## [0.5.1] — 2026-06-13
 
 ### Changed

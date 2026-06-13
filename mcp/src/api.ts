@@ -371,6 +371,13 @@ export async function trackOrder(orderId: string) {
   };
 }
 
+// ── Cancel order ─────────────────────────────────────────────────────────────
+export async function cancelOrder(orderId: string, reason = "") {
+  return (await client().post(`/customer/order/${orderId}/cancel`, {
+    reason,
+  })).data;
+}
+
 // ── Promo / voucher ─────────────────────────────────────────────────────────
 // Best-effort: validate a promo code (optionally scoped to a vendor/cart). The
 // confirmed code can then be passed to place_order via promo_codes.
