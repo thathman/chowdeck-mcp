@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.5.0] — 2026-06-13
+
+### Added
+- **MCP prompts** — pickable, reusable flows that drive the tools while keeping
+  the SKILL's safety rules (confirm address + total before ordering):
+  `order_food`, `find_food_near_me`, `track_my_order`, `reorder_my_usual`.
+
 ## [0.4.0] — 2026-06-13
 
 ### Added

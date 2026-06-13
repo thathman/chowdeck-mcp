@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.4.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.5.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -621,6 +621,77 @@ server.registerTool(
   "verify_payment",
   { description: "Verify a payment transaction status.", inputSchema: { transaction_id: z.string() }, annotations: READ },
   async ({ transaction_id }) => run(() => api.verifyPayment(transaction_id)),
+);
+
+// ── Prompts ───────────────────────────────────────────────────────────────────
+// Reusable, user-pickable flows. Each returns a user message that points the
+// agent at the right tools while preserving the SKILL's safety rules
+// (confirm address + total before ordering; never auto-charge).
+
+function userPrompt(text: string) {
+  return { messages: [{ role: "user" as const, content: { type: "text" as const, text } }] };
+}
+
+server.registerPrompt(
+  "order_food",
+  {
+    title: "Order food on Chowdeck",
+    description: "Run the full Chowdeck ordering flow: setup, find a vendor, build a cart, confirm, and check out.",
+    argsSchema: { craving: z.string().optional().describe("What the user feels like eating, if known") },
+  },
+  ({ craving }) =>
+    userPrompt(
+      `Help me order food on Chowdeck${craving ? ` — I'm in the mood for ${craving}` : ""}.\n\n` +
+        "Start by calling get_setup_status. If I'm not set up, run first-time setup (login + confirm delivery address). " +
+        "Then find vendors/meals (search / list_vendors / featured_vendors), build a cart with update_cart, quote the fee with get_delivery_fee, " +
+        "then show me the full summary — items, vendor, delivery fee, and total. Only after I approve should you call place_order with confirm:true. " +
+        "After placing, give me the delivery PIN, rider info, and tracking link.",
+    ),
+);
+
+server.registerPrompt(
+  "find_food_near_me",
+  {
+    title: "Find food near me",
+    description: "Discover vendors and meals near the saved delivery address, with optional filters.",
+    argsSchema: { craving: z.string().optional(), open_now: z.string().optional().describe("'true' to only show vendors open now") },
+  },
+  ({ craving, open_now }) =>
+    userPrompt(
+      `What can I order on Chowdeck near me right now${craving ? ` for ${craving}` : ""}? ` +
+        "Confirm my delivery address first (get_setup_status / get_active_address), then use search and list_vendors" +
+        (open_now === "true" ? " with open_now:true" : "") +
+        ". Show me a short, ranked list with rating, delivery time, and fee — don't dump full menus.",
+    ),
+);
+
+server.registerPrompt(
+  "track_my_order",
+  {
+    title: "Track my Chowdeck order",
+    description: "Show the live status of the user's current (or a specific) order.",
+    argsSchema: { order_id: z.string().optional().describe("A specific order id, if known") },
+  },
+  ({ order_id }) =>
+    userPrompt(
+      order_id
+        ? `Track my Chowdeck order ${order_id} — call track_order and summarise status, ETA, rider, delivery PIN, and the tracking link.`
+        : "Track my current Chowdeck order. Call get_active_orders, then track_order on the latest, and summarise status, ETA, rider, delivery PIN, and tracking link.",
+    ),
+);
+
+server.registerPrompt(
+  "reorder_my_usual",
+  {
+    title: "Reorder a past order",
+    description: "Pick a recent order and place it again.",
+    argsSchema: {},
+  },
+  () =>
+    userPrompt(
+      "I want to reorder something I've had before. Call get_order_history, show me my recent orders, and once I pick one, " +
+        "use reorder to rebuild the cart, re-quote the delivery fee, confirm the total with me, then place_order with confirm:true.",
+    ),
 );
 
 // Watermark banner -> stderr only (stdout is reserved for the MCP protocol).
