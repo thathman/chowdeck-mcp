@@ -162,10 +162,12 @@ export async function getMenu(vendorId: number, category?: string) {
   // Client-side category filter: when specified, strip items from other
   // categories so the response stays small enough to avoid truncation.
   if (category && res?.data && Array.isArray(res.data)) {
-    const needle = category.toLowerCase();
-    res.data = res.data.filter((item: any) =>
-      item.category?.name?.toLowerCase().includes(needle),
-    );
+    const needle = category.trim().toLowerCase();
+    if (needle) {
+      res.data = res.data.filter((item: any) =>
+        item.category?.name?.toLowerCase().includes(needle),
+      );
+    }
   }
   return res;
 }
