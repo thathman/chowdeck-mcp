@@ -80,24 +80,37 @@ flowchart TD
 
 ## ✨ Features
 
-The server exposes **38 tools**, grouped by capability (request/response details
-are intentionally omitted from this README):
+The server exposes **45 tools** and **4 prompts**, grouped by capability
+(request/response details are intentionally omitted from this README):
 
 - **Setup & session** — persistent login + delivery address, automatic
   new-vs-returning customer detection, saved payment preference.
-- **Location** — address autocomplete, place details, reverse geocoding, and
-  saving a precisely resolved delivery address (no guessed coordinates).
-- **Discovery** — storefront config, vendor listings, featured/handpicked
-  vendors, search, menu categories, menus, and individual menu items.
-- **Cart** — create/update, list all, per-vendor view, clear, delete.
+- **Location** — address autocomplete, place details, reverse geocoding (your
+  own `CHOWDECK_MAPS_KEY`), and saving a precisely resolved delivery address.
+- **Discovery** — storefront config, vendor listings with **filters** (sort,
+  open-now, min-rating, max-fee, free-delivery), featured/handpicked vendors,
+  search, menu categories, menus, and individual menu items.
+- **Favourites** — list, add, and remove saved vendors.
+- **Cart** — create/update, list all, per-vendor view, clear, delete, and
+  **reorder** from a past order.
 - **Auth** — Nigerian phone-number OTP login and profile lookup.
 - **Account** — saved addresses, wallet balance, order history, payment methods.
-- **Orders & checkout** — delivery-fee quote, place order, active orders, order
-  detail (with delivery PIN + rider info), payment channels, payment start, and
-  payment verification.
+- **Orders & checkout** — delivery-fee quote, place order (with optional
+  **scheduled delivery**, **rider tip**, and **promo codes**), **live order
+  tracking** (status/ETA/PIN/rider), active orders, order detail, payment
+  channels, payment start/verify, and **wallet top-up**.
 
-Sessions persist to `~/.chowdeck-mcp/session.json`, so the one-time login and
-address setup survive restarts.
+**Safety:** every tool is hinted `readOnly` or `destructive`; money-moving and
+data-loss tools (`place_order`, `wallet_topup`, `clear_carts`, `delete_cart`,
+`logout`) require an explicit `confirm: true` and otherwise return a
+"confirm with the user first" no-op. Large responses are slimmed to keep token
+use low; `get_session` / `get_setup_status` return structured output.
+
+**Prompts:** `order_food`, `find_food_near_me`, `track_my_order`,
+`reorder_my_usual`.
+
+Sessions persist to `~/.chowdeck-mcp/session.json` (written `0600`), so the
+one-time login and address setup survive restarts.
 
 ---
 
