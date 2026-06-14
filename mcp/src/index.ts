@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.5.1" });
+const server = new McpServer({ name: "chowdeck", version: "0.6.0" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -263,8 +263,15 @@ server.registerTool(
 
 server.registerTool(
   "get_menu",
-  { description: "List a vendor's full menu.", inputSchema: { vendor_id: z.number() }, annotations: READ },
-  async ({ vendor_id }) => run(() => api.getMenu(vendor_id), { slim: true }),
+  {
+    description: "List a vendor's menu. Optionally filter by category name (e.g. 'Small Chops', 'Rice') to avoid truncation on large menus.",
+    inputSchema: {
+      vendor_id: z.number(),
+      category: z.string().optional().describe("Filter by category name (case-insensitive partial match)"),
+    },
+    annotations: READ,
+  },
+  async ({ vendor_id, category }) => run(() => api.getMenu(vendor_id, category), { slim: true }),
 );
 
 server.registerTool(
@@ -340,7 +347,7 @@ server.registerTool(
 server.registerTool(
   "update_cart",
   {
-    description: "Create or update a cart with items for a vendor. Works as guest after set_address.",
+    description: "Create or update a cart with items for a vendor. Works as guest after set_address. Use pack_reference to group items into separate packs within one cart.",
     inputSchema: {
       vendor_id: z.number(),
       items: z.array(
@@ -348,6 +355,7 @@ server.registerTool(
           item_id: z.number(),
           quantity: z.number().int().min(1).max(99),
           type: z.string().default("menu"),
+          pack_reference: z.string().optional().describe("Group items into packs by matching pack_reference values"),
         }),
       ),
       address_id: z.number().optional(),
@@ -571,6 +579,47 @@ server.registerTool(
     annotations: READ,
   },
   async ({ order_id }) => run(() => api.trackOrder(order_id)),
+);
+
+server.registerTool(
+  "cancel_order",
+  {
+    description: "Cancel a placed, not-yet-fulfilled order. DESTRUCTIVE — requires confirm:true after the user agrees; any refund goes to the Chowdeck wallet. Best-effort endpoint.",
+    inputSchema: { order_id: z.string().describe("Order ID to cancel"), reason: z.string().describe("Reason for cancellation"), ...CONFIRM },
+    annotations: DESTRUCTIVE,
+  },
+  async ({ order_id, reason, confirm }) => {
+    if (!confirm) return needConfirm(`cancel order ${order_id} (reason: ${reason})`);
+    return run(() => api.cancelOrder(order_id, reason));
+  },
+);
+
+server.registerTool(
+  "tip_rider",
+  {
+    description: "Tip the rider for an order. DESTRUCTIVE — moves money; requires confirm:true after the user approves the amount. Amount in NGN (naira), paid from the Chowdeck wallet by default. Best-effort endpoint.",
+    inputSchema: {
+      order_id: z.string().describe("Order ID to tip for"),
+      amount: z.number().positive().describe("Tip amount in NGN (naira)"),
+      payment_method: z.string().default("wallet").describe("wallet, card, etc."),
+      ...CONFIRM,
+    },
+    annotations: DESTRUCTIVE,
+  },
+  async ({ order_id, amount, payment_method, confirm }) => {
+    if (!confirm) return needConfirm(`tip the rider ₦${amount} for order ${order_id}`);
+    return run(() => api.tipRider(order_id, amount, payment_method));
+  },
+);
+
+server.registerTool(
+  "get_notifications",
+  {
+    description: "Fetch the user's notifications (order updates, promos). Requires login.",
+    inputSchema: {},
+    annotations: READ,
+  },
+  async () => run(() => api.getNotifications(), { slim: true }),
 );
 
 server.registerTool(

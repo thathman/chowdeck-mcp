@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.6.0] — 2026-06-14
+
+Batch of agent-contributed features (originally PRs #12–#15 by @claw-son),
+integrated with safety fixes.
+
+### Added
+- **`get_menu` category filter** — optional `category` (case-insensitive partial
+  match) trims large menus to avoid response truncation. (#12)
+- **`update_cart` pack support** — optional `pack_reference` groups items into
+  separate packs within one cart. (#13)
+- **`cancel_order`** — cancel a not-yet-fulfilled order; refund to wallet. (#14)
+- **`tip_rider`** — tip the rider for an order. (#15)
+- **`get_notifications`** — fetch order/promo notifications. (#15)
+
+### Fixed
+- **`online_payment` fallback** — if the Paystack link fails, retry via
+  `startPayment` (v2) so the order still gets a checkout URL. (#13)
+
+### Safety fixes applied during integration
+- `cancel_order` and `tip_rider` are marked **destructive** and **confirmation-
+  gated** (`confirm:true`), consistent with `place_order` / `wallet_topup`.
+- `tip_rider` takes its amount in **NGN (naira)**, not kobo — matching
+  `place_order.rider_tip` and `wallet_topup` so the agent can't tip 100× by
+  mistake.
+- Also refreshed the stale `package-lock.json` (was `chowdeck-mcp@0.1.0`).
+
+> Note: `cancel_order`, `tip_rider`, and `get_notifications` use inferred
+> (best-effort) endpoints and may need adjustment against the live API.
+
 ## [0.5.1] — 2026-06-13
 
 ### Changed

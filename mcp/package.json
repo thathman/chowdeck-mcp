@@ -1,6 +1,6 @@
 {
   "name": "@thathman/chowdeck-mcp",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Unofficial Model Context Protocol (MCP) server for Chowdeck (Nigeria) — discover vendors, build carts, place and track orders from an AI agent. Not affiliated with Chowdeck.",
   "type": "module",
   "main": "dist/index.js",

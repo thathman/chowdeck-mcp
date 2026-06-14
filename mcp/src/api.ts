@@ -155,10 +155,19 @@ export async function getMenuCategories(vendorId: number) {
   return (await client().get(`/customer/vendor/${vendorId}/menu-category`)).data;
 }
 
-export async function getMenu(vendorId: number) {
-  return (await client().get(`/customer/vendor/${vendorId}/menu`, {
+export async function getMenu(vendorId: number, category?: string) {
+  const res = (await client().get(`/customer/vendor/${vendorId}/menu`, {
     params: { return_out_of_stock: 1 },
   })).data;
+  // Optional client-side category filter so large menus stay small enough to
+  // avoid response truncation (e.g. items in smaller categories getting cut off).
+  if (category && Array.isArray(res?.data)) {
+    const needle = category.trim().toLowerCase();
+    if (needle) {
+      res.data = res.data.filter((item: any) => item?.category?.name?.toLowerCase().includes(needle));
+    }
+  }
+  return res;
 }
 
 export async function getMenuItem(vendorId: number, menuId: number) {
@@ -228,7 +237,7 @@ export async function getCartByVendor(vendorId: number) {
 
 export async function createOrUpdateCart(body: {
   vendor_id: number;
-  items: { item_id: number; quantity: number; type?: string }[];
+  items: { item_id: number; quantity: number; type?: string; pack_reference?: string }[];
   address_id?: number;
   class?: string;
 }) {
@@ -371,6 +380,25 @@ export async function trackOrder(orderId: string) {
   };
 }
 
+// ── Cancel order ─────────────────────────────────────────────────────────────
+// Best-effort: cancel a placed, not-yet-fulfilled order. Any refund goes to the
+// Chowdeck wallet. Endpoint inferred.
+export async function cancelOrder(orderId: string, reason = "") {
+  return (await client().post(`/customer/order/${orderId}/cancel`, { reason })).data;
+}
+
+// ── Tip rider ────────────────────────────────────────────────────────────────
+// Best-effort: tip the rider for an order. Amount is in NGN (naira) — consistent
+// with place_order's rider_tip and wallet_topup — paid from the wallet by default.
+export async function tipRider(orderId: string, amount: number, paymentMethod = "wallet") {
+  return (await client().post(`/customer/order/${orderId}/tip`, { amount, payment_method: paymentMethod })).data;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+export async function getNotifications() {
+  return (await client().get("/customer/notification")).data;
+}
+
 // ── Promo / voucher ─────────────────────────────────────────────────────────
 // Best-effort: validate a promo code (optionally scoped to a vendor/cart). The
 // confirmed code can then be passed to place_order via promo_codes.
@@ -503,13 +531,20 @@ export async function placeOrder(body: {
 
   // For online payment, immediately fetch the Paystack checkout link so the
   // order isn't abandoned. The hosted page lets the user pick card/transfer/etc;
-  // online_channel just seeds it.
+  // online_channel just seeds it. If that path fails, fall back to startPayment
+  // (v2), a different Paystack integration, so the order still gets a link.
   if (body.payment_method === "online_payment" && res?.data?.id) {
     try {
       const pay: any = await startOrderPayment(res.data.id, body.online_channel ?? "card");
       res.data.payment = pay?.data ?? pay;
     } catch (err: any) {
-      res.data.payment_error = err?.response?.data ?? err?.message ?? String(err);
+      try {
+        const fallback: any = await startPayment({ order_id: res.data.id, method: body.online_channel ?? "card" });
+        res.data.payment = fallback?.data ?? fallback;
+        res.data._payment_fallback = "startPayment_v2";
+      } catch {
+        res.data.payment_error = err?.response?.data ?? err?.message ?? String(err);
+      }
     }
   }
   return res;
