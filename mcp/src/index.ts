@@ -17,7 +17,7 @@ import { z } from "zod";
 import * as api from "./api.js";
 import { session, clearSession } from "./session.js";
 
-const server = new McpServer({ name: "chowdeck", version: "0.6.0" });
+const server = new McpServer({ name: "chowdeck", version: "0.6.1" });
 
 // ── Result helpers ──────────────────────────────────────────────────────────
 
@@ -584,7 +584,7 @@ server.registerTool(
 server.registerTool(
   "cancel_order",
   {
-    description: "Cancel a placed, not-yet-fulfilled order. DESTRUCTIVE — requires confirm:true after the user agrees; any refund goes to the Chowdeck wallet. Best-effort endpoint.",
+    description: "Cancel a placed, not-yet-fulfilled order. DESTRUCTIVE — requires confirm:true after the user agrees; any refund goes to the Chowdeck wallet.",
     inputSchema: { order_id: z.string().describe("Order ID to cancel"), reason: z.string().describe("Reason for cancellation"), ...CONFIRM },
     annotations: DESTRUCTIVE,
   },
@@ -597,17 +597,17 @@ server.registerTool(
 server.registerTool(
   "tip_rider",
   {
-    description: "Tip the rider for an order. DESTRUCTIVE — moves money; requires confirm:true after the user approves the amount. Amount in NGN (naira), paid from the Chowdeck wallet by default. Best-effort endpoint.",
+    description: "Tip the rider for an order. DESTRUCTIVE — moves money; requires confirm:true after the user approves. Amount is in KOBO (50000 = ₦500), paid from the Chowdeck wallet by default. (Note: place_order's rider_tip is in naira; this endpoint uses kobo.)",
     inputSchema: {
       order_id: z.string().describe("Order ID to tip for"),
-      amount: z.number().positive().describe("Tip amount in NGN (naira)"),
+      amount: z.number().int().min(100).describe("Tip amount in KOBO (e.g. 50000 = ₦500)"),
       payment_method: z.string().default("wallet").describe("wallet, card, etc."),
       ...CONFIRM,
     },
     annotations: DESTRUCTIVE,
   },
   async ({ order_id, amount, payment_method, confirm }) => {
-    if (!confirm) return needConfirm(`tip the rider ₦${amount} for order ${order_id}`);
+    if (!confirm) return needConfirm(`tip the rider ₦${(amount / 100).toFixed(2)} (${amount} kobo) for order ${order_id}`);
     return run(() => api.tipRider(order_id, amount, payment_method));
   },
 );

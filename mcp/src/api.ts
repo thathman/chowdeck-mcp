@@ -381,17 +381,18 @@ export async function trackOrder(orderId: string) {
 }
 
 // ── Cancel order ─────────────────────────────────────────────────────────────
-// Best-effort: cancel a placed, not-yet-fulfilled order. Any refund goes to the
-// Chowdeck wallet. Endpoint inferred.
+// Cancel a placed, not-yet-fulfilled order. Any refund goes to the Chowdeck
+// wallet.
 export async function cancelOrder(orderId: string, reason = "") {
   return (await client().post(`/customer/order/${orderId}/cancel`, { reason })).data;
 }
 
 // ── Tip rider ────────────────────────────────────────────────────────────────
-// Best-effort: tip the rider for an order. Amount is in NGN (naira) — consistent
-// with place_order's rider_tip and wallet_topup — paid from the wallet by default.
-export async function tipRider(orderId: string, amount: number, paymentMethod = "wallet") {
-  return (await client().post(`/customer/order/${orderId}/tip`, { amount, payment_method: paymentMethod })).data;
+// Tip the rider for an order. Amount is in KOBO (50000 = ₦500), matching the
+// value the storefront sends to this endpoint; paid from the wallet by default.
+// NOTE: this differs from place_order's rider_tip, which is in naira.
+export async function tipRider(orderId: string, amountKobo: number, paymentMethod = "wallet") {
+  return (await client().post(`/customer/order/${orderId}/tip`, { amount: amountKobo, payment_method: paymentMethod })).data;
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

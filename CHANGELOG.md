@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow. The order is created unpaid and a hosted `pay_for_me` link reaches
   Paystack, but full programmatic completion is not yet wired.
 
+## [0.6.1] — 2026-06-14
+
+### Fixed
+- **`tip_rider` amount is back to KOBO** (50000 = ₦500), matching the value the
+  `/tip` endpoint actually accepts (verified against the live API). v0.6.0 had
+  changed it to naira for consistency, which would have under-tipped 100×. The
+  confirmation prompt now shows both (`₦500.00 (50000 kobo)`) as a sanity check.
+  (`place_order.rider_tip` remains naira; the difference is documented in both.)
+
+### Changed
+- Dropped the "best-effort / inferred endpoint" caveats on `cancel_order`,
+  `tip_rider`, and `get_notifications` now that they're confirmed against the
+  live API.
+
 ## [0.6.0] — 2026-06-14
 
 Batch of agent-contributed features (originally PRs #12–#15 by @claw-son),
