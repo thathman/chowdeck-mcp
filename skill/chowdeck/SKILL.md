@@ -57,6 +57,7 @@ Before `place_order`, always:
 1. **Re-confirm the delivery address** — read it back (`get_active_address` / `get_session`) and show exactly where it's going. Let the user switch (re-run the address-resolution flow). Never place against an unconfirmed address.
 2. **Apply the payment preference** — if `payment_pref.mode` is `"default"`, use the saved method; if `"ask"` (or unset), list `get_payment_methods` and have the user pick.
 3. **Confirm the full order** — items, vendor, delivery fee, and total. Even in `default` payment mode, the total and address are always confirmed; "default" only removes method-selection, not the final go-ahead.
+4. **Ask for notes** — before placing, ask if the user has any special instructions for the restaurant (`customer_vendor_note`, e.g. "no onions", "extra spicy") or the rider (`customer_delivery_note`, e.g. "gate code 1234", "leave at reception"). Only pass them if the user provides one.
 
 ## Everyday flows
 
@@ -72,6 +73,7 @@ Before `place_order`, always:
 
 **Paying without a saved card (new / card-less customers)**
 - Saved card: `place_order` with `payment_method: "card"` + `payment_method_id` charges inline (response `made_payment: true`).
+- **Wallet + card split:** If the user has wallet balance but it's not enough to cover the full order, use `split_payment_with_wallet: true` with `payment_method: "card"` + `payment_method_id`. Chowdeck drains the wallet first and charges the card for the remainder.
 - No saved card / wants bank transfer: `place_order` with `payment_method: "pay_for_me"`. The response includes `pay_for_me_url` — a Chowdeck-hosted payment page (expires ~1 hour). Give that link to the user (or drive it in a browser). On it: **Make Payment → choose Card / Bank Transfer / Opay / USSD / QR / etc → Make payment** opens Paystack to complete (e.g. a bank-transfer account number). The order stays unpaid until paid there.
 - Note: the raw `start_order_payment` / `/order/{id}/payment` API does not reliably mint a Paystack link ("Unable to process payment link"); use the `pay_for_me_url` route instead. Unpaid orders auto-expire.
 
