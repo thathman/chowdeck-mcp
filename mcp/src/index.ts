@@ -547,6 +547,7 @@ server.registerTool(
       promo_codes: z.array(z.string()).optional(),
       customer_vendor_note: z.string().optional(),
       customer_delivery_note: z.string().optional(),
+      split_payment_with_wallet: z.boolean().optional().describe("When true, uses wallet balance first and charges the card for the remainder. Requires payment_method 'card'."),
       scheduled_for: z.string().optional().describe("ISO 8601 time to schedule delivery instead of ASAP (best-effort)"),
       rider_tip: z.number().min(0).optional().describe("Optional tip for the rider, in NGN"),
       ...CONFIRM,
